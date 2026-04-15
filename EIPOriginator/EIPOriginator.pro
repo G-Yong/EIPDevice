@@ -12,11 +12,13 @@ win32-msvc*: QMAKE_CXXFLAGS += /utf-8
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    eipclient.cpp
+    eipclient.cpp \
+    edsparser.cpp
 
 HEADERS += \
     mainwindow.h \
-    eipclient.h
+    eipclient.h \
+    edsparser.h
 
 # Cross-platform socket library
 win32: LIBS += -lws2_32

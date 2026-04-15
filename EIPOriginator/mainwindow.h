@@ -14,6 +14,7 @@
 #include <QGroupBox>
 
 class EipClient;
+class EdsParser;
 
 class MainWindow : public QMainWindow
 {
@@ -34,6 +35,9 @@ private slots:
     void onDeviceDiscovered(const struct EipDeviceInfo &dev);
     void onDiscoverFinished();
     void onDeviceTableDoubleClicked(int row, int col);
+
+    // EDS
+    void onBtnLoadEds();
 
     // Identity
     void onBtnReadIdentity();
@@ -64,6 +68,8 @@ private:
     QWidget* createAssemblyTab();
     QWidget* createIOTab();
     void updateConnectionStatus(bool connected);
+    void applyEdsConfig();
+    void validateAndApplyEds();
 
     EipClient *m_client = nullptr;
 
@@ -73,6 +79,8 @@ private:
     QPushButton *m_btnConnect    = nullptr;
     QPushButton *m_btnDisconnect = nullptr;
     QLabel      *m_lblStatus     = nullptr;
+    QPushButton *m_btnLoadEds    = nullptr;
+    QLabel      *m_lblEdsStatus  = nullptr;
 
     // Discover tab
     QTableWidget *m_deviceTable = nullptr;
@@ -116,6 +124,9 @@ private:
 
     // Tab widget
     QTabWidget *m_tabWidget = nullptr;
+
+    // EDS
+    EdsParser  *m_edsParser = nullptr;
 };
 
 #endif // MAINWINDOW_H

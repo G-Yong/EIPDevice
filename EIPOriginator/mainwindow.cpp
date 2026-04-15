@@ -4,6 +4,7 @@
 
 #include "mainwindow.h"
 #include "eipclient.h"
+#include "edsparser.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -12,6 +13,8 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QDateTime>
+#include <QFileDialog>
+#include <QFileInfo>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -105,8 +108,16 @@ QWidget* MainWindow::createConnectionBar()
     connect(m_btnDisconnect, &QPushButton::clicked, this, &MainWindow::onBtnDisconnect);
     layout->addWidget(m_btnDisconnect);
 
+    m_btnLoadEds = new QPushButton(QStringLiteral("加载 EDS"), this);
+    connect(m_btnLoadEds, &QPushButton::clicked, this, &MainWindow::onBtnLoadEds);
+    layout->addWidget(m_btnLoadEds);
+
     m_lblStatus = new QLabel(this);
     layout->addWidget(m_lblStatus);
+
+    m_lblEdsStatus = new QLabel(this);
+    m_lblEdsStatus->setStyleSheet(QStringLiteral("color: gray;"));
+    layout->addWidget(m_lblEdsStatus);
 
     layout->addStretch();
     return group;
@@ -396,6 +407,10 @@ void MainWindow::onConnected()
 {
     updateConnectionStatus(true);
     appendLog(QStringLiteral("已连接到 %1").arg(m_editIp->text()));
+
+    // 如果已加载 EDS, 自动验证
+    if (m_edsParser)
+        validateAndApplyEds();
 }
 
 void MainWindow::onDisconnected()
@@ -641,6 +656,142 @@ void MainWindow::onIORefreshTimer()
         if ((i + 1) % 16 == 0) hex += QStringLiteral("\n");
     }
     m_txtInputData->setPlainText(hex.trimmed().toUpper());
+}
+
+/* ============================================================
+ * EDS Slots
+ * ============================================================ */
+void MainWindow::onBtnLoadEds()
+{
+    QString filepath = QFileDialog::getOpenFileName(
+        this, QStringLiteral("选择 EDS 文件"), QString(),
+        QStringLiteral("EDS 文件 (*.eds);;所有文件 (*.*)"));
+    if (filepath.isEmpty())
+        return;
+
+    auto *parser = new EdsParser();
+    if (!parser->load(filepath)) {
+        QMessageBox::critical(this, QStringLiteral("EDS 加载失败"),
+                              QStringLiteral("无法解析 EDS 文件"));
+        delete parser;
+        return;
+    }
+
+    delete m_edsParser;
+    m_edsParser = parser;
+
+    QString fname = QFileInfo(filepath).fileName();
+    m_lblEdsStatus->setText(QStringLiteral("EDS: %1").arg(fname));
+    m_lblEdsStatus->setStyleSheet(QStringLiteral("color: blue;"));
+
+    appendLog(QStringLiteral("EDS 已加载: %1").arg(filepath));
+    appendLog(m_edsParser->summary());
+
+    if (m_client->isConnected()) {
+        validateAndApplyEds();
+    } else {
+        if (QMessageBox::question(this, QStringLiteral("提示"),
+                QStringLiteral("当前未连接设备, 无法验证 EDS 匹配.\n是否仍然应用 EDS 参数配置?"))
+            == QMessageBox::Yes)
+        {
+            applyEdsConfig();
+        }
+    }
+}
+
+void MainWindow::validateAndApplyEds()
+{
+    if (!m_edsParser || !m_client->isConnected())
+        return;
+
+    EipDeviceInfo info = m_client->readIdentity();
+    if (info.vendorId == 0 && info.productCode == 0 && info.serialNumber == 0) {
+        appendLog(QStringLiteral("EDS 验证失败: 无法读取设备 Identity"));
+        QMessageBox::warning(this, QStringLiteral("验证失败"),
+                             QStringLiteral("无法读取设备 Identity"));
+        return;
+    }
+
+    auto result = m_edsParser->matchDevice(info.vendorId, info.deviceType,
+                                           info.productCode, info.revisionMajor);
+
+    QString fname = QFileInfo(m_edsParser->filePath()).fileName();
+
+    if (result.matched) {
+        m_lblEdsStatus->setText(QStringLiteral("EDS: %1 ✓ 匹配").arg(fname));
+        m_lblEdsStatus->setStyleSheet(QStringLiteral("color: green; font-weight: bold;"));
+        appendLog(QStringLiteral("EDS 验证通过: 设备匹配!"));
+        applyEdsConfig();
+        QMessageBox::information(this, QStringLiteral("EDS 匹配"),
+                                 QStringLiteral("EDS 文件与设备匹配!\n已自动配置所有参数."));
+    } else {
+        m_lblEdsStatus->setText(QStringLiteral("EDS: %1 ✗ 不匹配").arg(fname));
+        m_lblEdsStatus->setStyleSheet(QStringLiteral("color: red; font-weight: bold;"));
+        QString mismatchText = result.mismatches.join(QLatin1Char('\n'));
+        appendLog(QStringLiteral("EDS 验证失败 - 不匹配:\n%1").arg(mismatchText));
+        if (QMessageBox::question(this, QStringLiteral("EDS 不匹配"),
+                QStringLiteral("EDS 与设备不匹配:\n%1\n\n是否仍然强制应用参数?").arg(mismatchText))
+            == QMessageBox::Yes)
+        {
+            applyEdsConfig();
+        }
+    }
+}
+
+void MainWindow::applyEdsConfig()
+{
+    if (!m_edsParser)
+        return;
+
+    EdsIoConfig cfg = m_edsParser->getIoConfig();
+    QStringList applied;
+
+    // I/O connection params
+    if (cfg.inputAssembly >= 0) {
+        m_spinInputAsm->setValue(cfg.inputAssembly);
+        applied << QStringLiteral("Input Assembly = %1").arg(cfg.inputAssembly);
+    }
+    if (cfg.outputAssembly >= 0) {
+        m_spinOutputAsm->setValue(cfg.outputAssembly);
+        applied << QStringLiteral("Output Assembly = %1").arg(cfg.outputAssembly);
+    }
+    if (cfg.configAssembly >= 0) {
+        m_spinConfigAsm->setValue(cfg.configAssembly);
+        applied << QStringLiteral("Config Assembly = %1").arg(cfg.configAssembly);
+    }
+    if (cfg.inputAssembly >= 0) {
+        m_spinInputSize->setValue(cfg.inputSize);
+        applied << QStringLiteral("Input Size = %1").arg(cfg.inputSize);
+    }
+    if (cfg.outputAssembly >= 0) {
+        m_spinOutputSize->setValue(cfg.outputSize);
+        applied << QStringLiteral("Output Size = %1").arg(cfg.outputSize);
+    }
+    if (cfg.rpiUs > 0) {
+        int rpiMs = cfg.rpiUs / 1000;
+        if (rpiMs < 1) rpiMs = 1;
+        m_spinRpiMs->setValue(rpiMs);
+        applied << QStringLiteral("RPI = %1 ms").arg(rpiMs);
+    }
+
+    // Assembly read/write page
+    if (cfg.inputAssembly >= 0)
+        m_spinReadInst->setValue(cfg.inputAssembly);
+    if (cfg.outputAssembly >= 0) {
+        m_spinWriteInst->setValue(cfg.outputAssembly);
+        int outSz = cfg.outputSize > 0 ? cfg.outputSize : 32;
+        QStringList hex;
+        for (int i = 0; i < outSz; ++i) hex << QStringLiteral("00");
+        m_txtWriteData->setPlainText(hex.join(QLatin1Char(' ')));
+    }
+
+    if (!applied.isEmpty()) {
+        appendLog(QStringLiteral("EDS 自动配置已应用:"));
+        for (const QString &item : applied)
+            appendLog(QStringLiteral("  %1").arg(item));
+    } else {
+        appendLog(QStringLiteral("EDS 中未找到可配置的参数"));
+    }
 }
 
 /* ============================================================
