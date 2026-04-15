@@ -104,6 +104,22 @@ QList<EipNetworkInterface> EipTargetService::availableInterfaces()
 /* static */
 QString EipTargetService::generateEds(int inSz, int outSz)
 {
+    // 使用默认的设备信息
+    return generateEds(inSz, outSz,
+                       QStringLiteral("QtEipTarget"),
+                       OPENER_DEVICE_VENDOR_ID,
+                       OPENER_DEVICE_NAME,
+                       OPENER_DEVICE_PRODUCT_CODE,
+                       OPENER_DEVICE_MAJOR_REVISION,
+                       OPENER_DEVICE_MINOR_REVISION);
+}
+
+/* static */
+QString EipTargetService::generateEds(int inSz, int outSz,
+                                      const QString &vendorName, quint16 vendorID,
+                                      const QString &productName, quint16 productCode,
+                                      quint8 majorRev, quint8 minorRev)
+{
     QString eds;
     QTextStream ts(&eds);
 
@@ -114,7 +130,7 @@ QString EipTargetService::generateEds(int inSz, int outSz)
 
     // [File]
     ts << "[File]\n";
-    ts << "        DescText = \"QtEipTarget EtherNet/IP Adapter\";\n";
+    ts << "        DescText = \"" << productName << " EtherNet/IP Adapter\";\n";
     ts << "        CreateDate = " << QDate::currentDate().toString("MM-dd-yyyy") << ";\n";
     ts << "        CreateTime = " << QTime::currentTime().toString("HH:mm:ss") << ";\n";
     ts << "        ModDate = " << QDate::currentDate().toString("MM-dd-yyyy") << ";\n";
@@ -124,15 +140,15 @@ QString EipTargetService::generateEds(int inSz, int outSz)
 
     // [Device]
     ts << "[Device]\n";
-    ts << "        VendCode = " << OPENER_DEVICE_VENDOR_ID << ";\n";
-    ts << "        VendName = \"QtEipTarget\";\n";
+    ts << "        VendCode = " << vendorID << ";\n";
+    ts << "        VendName = \"" << vendorName << "\";\n";
     ts << "        ProdType = " << OPENER_DEVICE_TYPE << ";\n";
     ts << "        ProdTypeStr = \"Communications Adapter\";\n";
-    ts << "        ProdCode = " << OPENER_DEVICE_PRODUCT_CODE << ";\n";
-    ts << "        MajRev = " << OPENER_DEVICE_MAJOR_REVISION << ";\n";
-    ts << "        MinRev = " << OPENER_DEVICE_MINOR_REVISION << ";\n";
-    ts << "        ProdName = " << OPENER_DEVICE_NAME << ";\n";
-    ts << "        Catalog = \"QtEipTarget\";\n\n";
+    ts << "        ProdCode = " << productCode << ";\n";
+    ts << "        MajRev = " << majorRev << ";\n";
+    ts << "        MinRev = " << minorRev << ";\n";
+    ts << "        ProdName = \"" << productName << "\";\n";
+    ts << "        Catalog = \"" << productName << "\";\n\n";
 
     ts << "[Device Classification]\n";
     ts << "        Class1 = EtherNetIP;\n\n";

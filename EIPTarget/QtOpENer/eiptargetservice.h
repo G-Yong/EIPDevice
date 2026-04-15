@@ -65,6 +65,10 @@ public:
     /* -- Utilities -- */
     static QList<EipNetworkInterface> availableInterfaces();
     static QString generateEds(int inputSize, int outputSize);
+    static QString generateEds(int inputSize, int outputSize,
+                               const QString &vendorName, quint16 vendorID,
+                               const QString &productName, quint16 productCode,
+                               quint8 majorRev, quint8 minorRev);
 
 signals:
     void started();
