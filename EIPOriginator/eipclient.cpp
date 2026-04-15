@@ -45,6 +45,7 @@ EipClient::EipClient(QObject *parent)
     : QObject(parent)
 {
     m_tcpSocket = new QTcpSocket(this);
+    m_tcpSocket->setProxy(QNetworkProxy::NoProxy);
     connect(m_tcpSocket, &QTcpSocket::connected, this, &EipClient::onTcpConnected);
     connect(m_tcpSocket, &QTcpSocket::disconnected, this, &EipClient::onTcpDisconnected);
     connect(m_tcpSocket, &QTcpSocket::readyRead, this, &EipClient::onTcpReadyRead);
@@ -67,6 +68,7 @@ EipClient::~EipClient()
  * ============================================================ */
 void EipClient::discover(const QString &broadcastAddr, int timeoutMs)
 {
+    m_discoveredIps.clear();
     if (m_discoverSocket) {
         m_discoverSocket->close();
         m_discoverSocket->deleteLater();
@@ -130,6 +132,9 @@ void EipClient::onDiscoverReadyRead()
             dev.productName = QString::fromUtf8(item + idOff + 15, nameLen);
         }
 
+        if (m_discoveredIps.contains(dev.ip))
+            continue;
+        m_discoveredIps.insert(dev.ip);
         emit deviceDiscovered(dev);
     }
 }
@@ -198,6 +203,7 @@ void EipClient::onTcpError(QAbstractSocket::SocketError err)
 
 void EipClient::onTcpReadyRead()
 {
+    if (m_syncMode) return;
     m_tcpBuffer.append(m_tcpSocket->readAll());
 
     // Process complete encap packets
@@ -744,17 +750,40 @@ CipResponse EipClient::sendRRDataSync(const QByteArray &cipData,
         return errResp;
     }
 
+    // Prevent onTcpReadyRead from consuming our response
+    m_syncMode = true;
+
     QByteArray packet = buildSendRRData(cipData, extraCpf);
     m_tcpSocket->write(packet);
     m_tcpSocket->flush();
 
-    // Wait for response synchronously with event loop
-    if (!m_tcpSocket->waitForReadyRead(5000)) {
-        errResp.errorText = QStringLiteral("响应超时");
-        return errResp;
+    // Start with any leftover data in m_tcpBuffer
+    QByteArray raw = m_tcpBuffer;
+    m_tcpBuffer.clear();
+
+    // Wait until we have a complete encap packet
+    while (true) {
+        if (raw.size() >= EipConst::EncapHeaderLen) {
+            quint16 dataLen = readLE16(raw.constData() + 2);
+            int totalLen = EipConst::EncapHeaderLen + dataLen;
+            if (raw.size() >= totalLen) {
+                // Save any excess data back to m_tcpBuffer
+                if (raw.size() > totalLen)
+                    m_tcpBuffer = raw.mid(totalLen);
+                raw = raw.left(totalLen);
+                break;
+            }
+        }
+        if (!m_tcpSocket->waitForReadyRead(5000)) {
+            m_tcpBuffer = raw;
+            m_syncMode = false;
+            errResp.errorText = QStringLiteral("响应超时");
+            return errResp;
+        }
+        raw.append(m_tcpSocket->readAll());
     }
 
-    QByteArray raw = m_tcpSocket->readAll();
+    m_syncMode = false;
 
     quint16 cmd, len;
     quint32 session, status;

@@ -21,6 +21,8 @@
 #include <QByteArray>
 #include <QVector>
 #include <QMutex>
+#include <QSet>
+#include <QNetworkProxy>
 
 /* ============================================================
  * EtherNet/IP 协议常量
@@ -185,10 +187,12 @@ private:
     QString      m_targetIp;
     QString      m_localIp;
     QByteArray   m_tcpBuffer;
+    bool         m_syncMode = false;
 
     // Discovery
     QUdpSocket  *m_discoverSocket = nullptr;
     QTimer      *m_discoverTimer  = nullptr;
+    QSet<QString> m_discoveredIps;
 
     // I/O
     QUdpSocket  *m_ioSocket = nullptr;
