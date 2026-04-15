@@ -38,6 +38,7 @@ struct EipNetworkInterface
     QString name;          // Human-readable name
     QString ipAddress;     // IPv4 address
     QString displayLabel;  // "name (ip) [idx:N]"
+    QString openerIdent;   // OpENer identifier: interface name on Linux, index string on Windows
 };
 
 /* ---- EIP Target Service ---- */

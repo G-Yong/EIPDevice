@@ -96,6 +96,11 @@ QList<EipNetworkInterface> EipTargetService::availableInterfaces()
         ni.ipAddress = ipStr;
         ni.displayLabel = QStringLiteral("%1 (%2) [idx:%3]")
                               .arg(ni.name).arg(ni.ipAddress).arg(ni.index);
+#ifdef Q_OS_WIN
+        ni.openerIdent = QString::number(ni.index);
+#else
+        ni.openerIdent = iface.name();  // Linux: system name like "eth0"
+#endif
         result.append(ni);
     }
     return result;
