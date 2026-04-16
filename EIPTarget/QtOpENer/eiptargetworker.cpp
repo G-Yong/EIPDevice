@@ -109,11 +109,8 @@ QByteArray EipTargetWorker::outputData() const
 void EipTargetWorker::setInputData(const QByteArray &data)
 {
     QMutexLocker lock(&m_dataMutex);
-    int sz = qMin(data.size(), m_inputSize);
-    memcpy(g_input_data, data.constData(), sz);
-    if (sz < m_inputSize)
-        memset(g_input_data + sz, 0, m_inputSize - sz);
     m_inputData = data.left(m_inputSize);
+    m_inputDirty = true;
 }
 
 void EipTargetWorker::setIoSizes(int inputSize, int outputSize)
@@ -122,6 +119,19 @@ void EipTargetWorker::setIoSizes(int inputSize, int outputSize)
     m_outputSize = qBound(1, outputSize, 512);
     m_inputData.fill(0, m_inputSize);
     m_outputData.fill(0, m_outputSize);
+}
+
+void EipTargetWorker::setDeviceIdentity(const QString &vendorName, quint16 vendorID,
+                                        const QString &productName, quint16 productCode,
+                                        quint8 majorRev, quint8 minorRev)
+{
+    m_vendorName  = vendorName;
+    m_vendorID    = vendorID;
+    m_productName = productName;
+    m_productCode = productCode;
+    m_majorRev    = majorRev;
+    m_minorRev    = minorRev;
+    m_hasIdentity = true;
 }
 
 /* ============================================================
@@ -194,6 +204,15 @@ void EipTargetWorker::run(const QString &ifaceIndex)
     EipUint16 unique_connection_id = static_cast<EipUint16>(rand());
     CipStackInit(unique_connection_id);
 
+    /* 4.1 Apply device identity (override defaults from devicedata.h) */
+    if (m_hasIdentity) {
+        SetDeviceVendorId(m_vendorID);
+        SetDeviceProductCode(m_productCode);
+        SetDeviceRevision(m_majorRev, m_minorRev);
+        QByteArray nameBytes = m_productName.toUtf8();
+        SetDeviceProductName(nameBytes.constData());
+    }
+
     /* 5. Set MAC */
     CipEthernetLinkSetMac(mac_address);
 
@@ -241,21 +260,34 @@ void EipTargetWorker::run(const QString &ifaceIndex)
 
     emit started();
 
+    // NetworkHandlerProcessCyclic() 内部使用了 select() 系统调用，带有超时参数，
+    // 最长阻塞 10ms（由 kOpenerTimerTickInMilliSeconds = 10 控制）。
     /* 12. Event loop */
     while (!m_stopFlag.load() && g_end_stack == 0) {
+
+        // 此处的 m_inputData数据是发送给主站的
+        /* Apply pending input data from Qt side BEFORE OpENer processes */
+        {
+            QMutexLocker lock(&m_dataMutex);
+            if (m_inputDirty) {
+                int sz = qMin(m_inputData.size(), m_inputSize);
+                memcpy(g_input_data, m_inputData.constData(), sz);
+                if (sz < m_inputSize)
+                    memset(g_input_data + sz, 0, m_inputSize - sz);
+                m_inputDirty = false;
+            }
+        }
+
         if (kEipStatusOk != NetworkHandlerProcessCyclic()) {
             emit logMessage(QStringLiteral("OpENer: NetworkHandlerProcessCyclic() error"));
             break;
         }
 
-        /* Update input data from Qt side -> OpENer buffer */
-        {
-            QMutexLocker lock(&m_dataMutex);
-            if (!m_inputData.isEmpty()) {
-                int sz = qMin(m_inputData.size(), m_inputSize);
-                memcpy(g_input_data, m_inputData.constData(), sz);
-            }
-        }
+        // /* Read back actual g_input_data state (may have been modified by HandleApplication) */
+        // {
+        //     QMutexLocker lock(&m_dataMutex);
+        //     m_inputData = QByteArray(reinterpret_cast<const char*>(g_input_data), m_inputSize);
+        // }
     }
 
     /* 13. Cleanup */

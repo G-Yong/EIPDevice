@@ -58,10 +58,17 @@ public:
     void start(const QString &ifaceIndex);
     void stop();
 
+    // IP 协议标准偏向规定用 Scanner 视角来命名
+    // 因此 inputData-->TOData, outputData-->OTData
     /* -- I/O Data (thread-safe) -- */
     QByteArray inputData() const;
     QByteArray outputData() const;
     void setInputData(const QByteArray &data);
+
+    /* -- Device Identity (set before start, applied during init) -- */
+    void setDeviceIdentity(const QString &vendorName, quint16 vendorID,
+                           const QString &productName, quint16 productCode,
+                           quint8 majorRev, quint8 minorRev);
 
     /* -- Utilities -- */
     static QList<EipNetworkInterface> availableInterfaces();
@@ -77,6 +84,8 @@ signals:
     void errorOccurred(const QString &error);
     void logMessage(const QString &msg);
     void ioConnectionEvent(unsigned int outputAsm, unsigned int inputAsm, int event);
+    // IP 协议标准偏向规定用 Scanner 视角来命名
+    // 因此这个是属于OT数据，主站写入了新的O->T数据的事件
     void outputDataReceived(const QByteArray &data);
     void ipConfigured(const QString &ip);
 

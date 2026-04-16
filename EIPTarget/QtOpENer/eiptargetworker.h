@@ -31,6 +31,11 @@ public:
     int inputSize() const { return m_inputSize; }
     int outputSize() const { return m_outputSize; }
 
+    // Set device identity (must be called before start, applied during CipStackInit)
+    void setDeviceIdentity(const QString &vendorName, quint16 vendorID,
+                           const QString &productName, quint16 productCode,
+                           quint8 majorRev, quint8 minorRev);
+
 signals:
     void started();
     void stopped();
@@ -52,6 +57,16 @@ private:
     std::atomic<int>  m_stopFlag{0};
     int m_inputSize = 32;
     int m_outputSize = 32;
+    bool m_inputDirty = false;  // setInputData() pending write to g_input_data
+
+    // Device identity (applied after CipStackInit)
+    QString m_vendorName;
+    quint16 m_vendorID = 0;
+    QString m_productName;
+    quint16 m_productCode = 0;
+    quint8  m_majorRev = 0;
+    quint8  m_minorRev = 0;
+    bool    m_hasIdentity = false;
 
 public:
     mutable QMutex m_dataMutex;

@@ -57,6 +57,14 @@ void EipTargetService::stop()
     m_worker->stop();
 }
 
+void EipTargetService::setDeviceIdentity(const QString &vendorName, quint16 vendorID,
+                                         const QString &productName, quint16 productCode,
+                                         quint8 majorRev, quint8 minorRev)
+{
+    m_worker->setDeviceIdentity(vendorName, vendorID, productName, productCode,
+                                majorRev, minorRev);
+}
+
 QByteArray EipTargetService::inputData() const
 {
     return m_worker->inputData();
@@ -69,6 +77,7 @@ QByteArray EipTargetService::outputData() const
 
 void EipTargetService::setInputData(const QByteArray &data)
 {
+    qDebug() << "set input data" << data;
     m_worker->setInputData(data);
 }
 

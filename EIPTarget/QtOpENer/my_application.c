@@ -30,8 +30,6 @@ EipUint8 g_output_data[MY_MAX_IO_DATA_SIZE];
 EipUint8 g_config_data[MY_CONFIG_DATA_SIZE];
 EipUint8 g_explicit_data[MY_EXPLICIT_DATA_SIZE];
 
-static EipUint32 s_cycle_counter = 0;
-
 /* Snapshot of last-sent input data for Change-of-State detection */
 static EipUint8 s_last_input_data[MY_MAX_IO_DATA_SIZE];
 static int s_input_data_changed = 0;
@@ -96,12 +94,17 @@ EipStatus ApplicationInitialization(void) {
     return kEipStatusOk;
 }
 
+// 此函数会被周期调用
+// 调用路径为 NetworkHandlerProcessCyclic->ManageConnections->HandleApplication
 void HandleApplication(void) {
-    s_cycle_counter++;
-    g_input_data[0] = (EipUint8)(s_cycle_counter & 0xFF);
-    g_input_data[1] = (EipUint8)((s_cycle_counter >> 8) & 0xFF);
-    g_input_data[2] = (EipUint8)((s_cycle_counter >> 16) & 0xFF);
-    g_input_data[3] = (EipUint8)((s_cycle_counter >> 24) & 0xFF);
+    // if (!s_qt_manages_input) {
+    //     /* Default behavior: write cycle counter as demo data */
+    //     s_cycle_counter++;
+    //     g_input_data[0] = (EipUint8)(s_cycle_counter & 0xFF);
+    //     g_input_data[1] = (EipUint8)((s_cycle_counter >> 8) & 0xFF);
+    //     g_input_data[2] = (EipUint8)((s_cycle_counter >> 16) & 0xFF);
+    //     g_input_data[3] = (EipUint8)((s_cycle_counter >> 24) & 0xFF);
+    // }
 }
 
 void CheckIoConnectionEvent(unsigned int output_assembly,
