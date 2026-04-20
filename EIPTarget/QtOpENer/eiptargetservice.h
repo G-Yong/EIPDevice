@@ -41,6 +41,14 @@ struct EipNetworkInterface
     QString openerIdent;   // OpENer identifier: interface name on Linux, index string on Windows
 };
 
+/* ---- EDS Assembly Member descriptor ---- */
+struct EdsAssemblyMember
+{
+    quint8  cipType;     // CIP Data Type code (e.g., 0xC1=BOOL, 0xCA=REAL, 0xD1=BYTE)
+    int     bitLen;      // Size in bits within the assembly
+    QString name;        // Variable name (used in EDS comments)
+};
+
 /* ---- EIP Target Service ---- */
 class EipTargetService : public QObject
 {
@@ -72,8 +80,8 @@ public:
 
     /* -- Utilities -- */
     static QList<EipNetworkInterface> availableInterfaces();
-    static QString generateEds(int inputSize, int outputSize);
-    static QString generateEds(int inputSize, int outputSize,
+    static QString generateEds(const QList<EdsAssemblyMember> &inputMembers,
+                               const QList<EdsAssemblyMember> &outputMembers,
                                const QString &vendorName, quint16 vendorID,
                                const QString &productName, quint16 productCode,
                                quint8 majorRev, quint8 minorRev);

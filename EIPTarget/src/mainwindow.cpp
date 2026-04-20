@@ -6,6 +6,10 @@
 #include "eiptargetservice.h"
 
 #include <QVBoxLayout>
+
+extern "C" {
+#include "devicedata.h"
+}
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -284,7 +288,22 @@ void MainWindow::onExportEds()
         QStringLiteral("EDS Files (*.eds);;All Files (*)"));
     if (fileName.isEmpty()) return;
 
-    QString eds = EipTargetService::generateEds(inSz, outSz);
+    // Build assembly members: each byte as a BYTE (0xD1) member
+    QList<EdsAssemblyMember> inputMembers;
+    for (int i = 0; i < inSz; ++i)
+        inputMembers.append({0xD1, 8, QStringLiteral("In%1").arg(i)});
+    QList<EdsAssemblyMember> outputMembers;
+    for (int i = 0; i < outSz; ++i)
+        outputMembers.append({0xD1, 8, QStringLiteral("Out%1").arg(i)});
+
+    QString eds = EipTargetService::generateEds(
+        inputMembers, outputMembers,
+        QStringLiteral("QtEipTarget"),
+        OPENER_DEVICE_VENDOR_ID,
+        OPENER_DEVICE_NAME,
+        OPENER_DEVICE_PRODUCT_CODE,
+        OPENER_DEVICE_MAJOR_REVISION,
+        OPENER_DEVICE_MINOR_REVISION);
 
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
