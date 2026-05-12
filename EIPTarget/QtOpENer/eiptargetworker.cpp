@@ -88,10 +88,6 @@ EipTargetWorker::EipTargetWorker(QObject *parent)
 EipTargetWorker::~EipTargetWorker()
 {
     stop();
-    if (m_thread.isRunning()) {
-        m_thread.quit();
-        m_thread.wait(5000);
-    }
 }
 
 QByteArray EipTargetWorker::inputData() const
@@ -148,7 +144,13 @@ void EipTargetWorker::start(const QString &ifaceIndex)
     QThread *t = QThread::create([this, iface]() {
         run(iface);
     });
+    m_thread = t;
     t->setObjectName(QStringLiteral("OpENerThread"));
+    connect(t, &QThread::finished, this, [this, t]() {
+        if (m_thread == t) {
+            m_thread = nullptr;
+        }
+    });
     connect(t, &QThread::finished, t, &QObject::deleteLater);
     t->start();
 }
@@ -158,6 +160,14 @@ void EipTargetWorker::stop()
     m_stopFlag.store(1);
     /* OpENer checks g_end_stack to exit its loop */
     g_end_stack = 1;
+
+    QThread *thread = m_thread;
+    if (thread && thread->isRunning() && QThread::currentThread() != thread) {
+        thread->wait(5000);
+        if (thread->isFinished() && m_thread == thread) {
+            m_thread = nullptr;
+        }
+    }
 }
 
 /* ============================================================

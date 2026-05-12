@@ -52,7 +52,7 @@ public slots:
 private:
     void run(const QString &ifaceIndex);
 
-    QThread     m_thread;
+    QThread    *m_thread = nullptr;
     std::atomic<bool> m_running{false};
     std::atomic<int>  m_stopFlag{0};
     int m_inputSize = 32;
